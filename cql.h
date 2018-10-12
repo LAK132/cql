@@ -62,7 +62,7 @@ namespace cql
     };
 
     template<typename L, typename R>
-    using bigger_t = decltype(declval<typename decay<typename template_t<L>::type>::type>() * declval<typename decay<typename template_t<L>::type>::type>());
+    using bigger_t = decltype(declval<typename decay<typename template_t<L>::type>::type>() * declval<typename decay<typename template_t<R>::type>::type>());
 
     template<typename T> struct quat;
     template<typename T> struct dquat;
