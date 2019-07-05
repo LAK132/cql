@@ -444,8 +444,8 @@ namespace cql
 
         static dquat_t FromTranslation(const quat_t &trans)
         {
-            const quat_t tra(trans.x, trans.y, trans.z, value_t(0));
-            const quat_t rea(0, 0, 0, 1);
+            const quat_t tra = {trans.x, trans.y, trans.z, value_t(0)};
+            const quat_t rea = {0, 0, 0, 1};
             return {rea, value_t(0.5) * (tra * rea)};
         }
 
@@ -657,7 +657,7 @@ namespace cql
         static dquat_t FromTranslation(const CQL_VEC3 &vec)
         {
             const quat_t tra = {vec.x, vec.y, vec.z, value_t(0)};
-            const quat_t rea(0, 0, 0, 1);
+            const quat_t rea = {0, 0, 0, 1};
             return {rea, value_t(0.5) * (tra * rea)};
         }
 
