@@ -725,7 +725,7 @@ namespace cql
     }
 
     CQL_GLM_TEMPLATE
-    dquat<GLMT> FromTransaction(const CQL_VEC3 &vec)
+    dquat<GLMT> FromTranslation(const CQL_VEC3 &vec)
     {
         return dquat<GLMT>::FromTranslation(vec);
     }
