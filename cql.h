@@ -22,11 +22,22 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+#ifndef CQL_QUATERNION_H
+#define CQL_QUATERNION_H
+
 #include <cmath>
 #include <utility>
 #include <type_traits>
 
-#ifndef CQL_NO_GLM
+#if !defined(CQL_HAS_GLM_HEADERS) && \
+    __has_include(<glm/gtc/constants.hpp>) && \
+    __has_include(<glm/mat4x4.hpp>) && \
+    __has_include(<glm/vec4.hpp>) && \
+    __has_include(<glm/vec3.hpp>)
+#define CQL_HAS_GLM_HEADERS
+#endif
+
+#ifdef CQL_HAS_GLM_HEADERS
 #include <glm/gtc/constants.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
@@ -35,108 +46,94 @@ SOFTWARE.
 #define CQL_MAT4 glm::tmat4x4<GLMT,GLMP>
 #define CQL_VEC4 glm::tvec4<GLMT,GLMP>
 #define CQL_VEC3 glm::tvec3<GLMT,GLMP>
-#endif // CQL_NO_GLM
-
-#ifndef CQL_QUATERNION_H
-#define CQL_QUATERNION_H
+#endif // CQL_HAS_GLM_HEADERS
 
 namespace cql
 {
-    using std::enable_if;
-    template<bool B, typename T>
-    using enable_if_t = typename enable_if<B, T>::type;
-    using std::is_same;
-    using std::sqrt;
-    using std::declval;
-    using std::decay;
-
-    template<typename T>
-    struct template_t
-    {
-        using type = T;
-    };
-    template<template<typename> typename T, typename U>
-    struct template_t<T<U>>
-    {
-        using type = U;
-    };
-
-    template<typename L, typename R>
-    using bigger_t = decltype(declval<typename decay<typename template_t<L>::type>::type>() * declval<typename decay<typename template_t<R>::type>::type>());
-
-    template<typename T> struct quat;
-    template<typename T> struct dquat;
-
-    template<typename T, typename T2 = void>
-    struct _is_quat;
-    template<typename T>
-    struct _is_quat<quat<T>> { static constexpr bool value = true; };
-    template<typename T>
-    struct _is_quat<dquat<T>> { static constexpr bool value = true; };
-    template<typename T>
-    struct _is_quat<T> { static constexpr bool value = false; };
-    template<typename T>
-    using is_quat = _is_quat<typename decay<T>::type>;
-
-    template<typename L, typename R, typename T = void>
-    struct has_rhs_mult { static constexpr bool value = false; };
-    template<typename L, typename R>
-    struct has_rhs_mult<L, R, decltype(declval<L>().operator*(declval<R>()))> { static constexpr bool value = true; };
-
     template<typename T>
     struct quat
     {
         using value_t = T;
-        using type_t = quat<value_t>;
+        using quat_t = quat<value_t>;
         value_t x;
         value_t y;
         value_t z;
         value_t w;
 
+        quat(const quat_t &rhs)
+        : x(rhs.x), y(rhs.y), z(rhs.z), w(rhs.w)
+        {}
+
         template<typename R>
-        quat(const quat<R> &rhs) : x(rhs.x), y(rhs.y), z(rhs.z), w(rhs.w) {}
-        quat(const value_t &val = value_t(0)) : x(val), y(val), z(val), w(val) {}
-        quat(const value_t (&val)[4]) : x(val[0]), y(val[1]), z(val[2]), w(val[3]) {}
-        quat(const value_t &X, const value_t &Y, const value_t &Z, const value_t &W) : x(X), y(Y), z(Z), w(W) {}
+        explicit quat(const quat<R> &rhs)
+        : x(rhs.x), y(rhs.y), z(rhs.z), w(rhs.w)
+        {}
+
+        quat(const value_t &val = value_t(0))
+        : x(val), y(val), z(val), w(val)
+        {}
+
+        quat(const value_t (&val)[4])
+        : x(val[0]), y(val[1]), z(val[2]), w(val[3])
+        {}
+
+        quat(const value_t &X, const value_t &Y,
+             const value_t &Z, const value_t &W)
+        : x(X), y(Y), z(Z), w(W)
+        {}
 
         //
-        // Quaternion operators
+        // Conjugate operator
         //
 
-        // conjugate operator
-        type_t operator*() const
+        quat_t conjugate() const
         {
             return {-x, -y, -z, w};
         }
-        // magnitude operator
-        value_t operator~() const
+
+        inline quat_t operator*() const
         {
-            return sqrt((x*x)+(y*y)+(z*z)+(w*w));
+            return conjugate();
         }
+
+        //
+        // Magnitude operator
+        //
+
         value_t magnitude() const
         {
-            return sqrt((x*x)+(y*y)+(z*z)+(w*w));
+            return std::sqrt((x * x) + (y * y) + (z * z) + (w * w));
         }
-        // norm operator
-        type_t operator!() const
+
+        inline value_t operator~() const
+        {
+            return magnitude();
+        }
+
+        //
+        // Normalise operator
+        //
+
+        quat_t &normalise()
+        {
+            return *this *= (value_t(1) / magnitude());
+        }
+
+        quat_t normalised() const
         {
             return *this * (value_t(1) / magnitude());
         }
-        type_t norm() const
+
+        inline quat_t operator!() const
         {
-            return *this * (value_t(1) / magnitude());
-        }
-        type_t& normalize()
-        {
-            return *this *= value_t(1) / magnitude();
+            return normalised();
         }
 
         //
         // Assignment operator
         //
 
-        template<typename R>
-        type_t& operator=(const quat<R> &rhs)
+        quat_t &operator=(const quat_t &rhs)
         {
             x = rhs.x; y = rhs.y; z = rhs.z; w = rhs.w;
             return *this;
@@ -146,13 +143,12 @@ namespace cql
         // Addition operators
         //
 
-        template<typename R>
-        quat<bigger_t<value_t, R>> operator+(const quat<R> &rhs) const
+        quat_t operator+(const quat_t &rhs) const
         {
-            return {x+rhs.x, y+rhs.y, z+rhs.z, w+rhs.w};
+            return {x + rhs.x, y + rhs.y, z + rhs.z, w + rhs.w};
         }
-        template<typename R>
-        type_t& operator+=(const quat<R> &rhs)
+
+        quat_t &operator+=(const quat_t &rhs)
         {
             x += rhs.x; y += rhs.y; z += rhs.z; w += rhs.w;
             return *this;
@@ -162,13 +158,13 @@ namespace cql
         // Subtraction operators
         //
 
-        template<typename R>
-        quat<bigger_t<value_t, R>> operator-(const quat<R> &rhs) const
+        quat_t operator-(const quat_t &rhs) const
         {
-            return {x-rhs.x, y-rhs.y, z-rhs.z, w-rhs.w};
+            return {x - rhs.x, y - rhs.y, z - rhs.z, w - rhs.w};
         }
+
         template<typename R>
-        type_t& operator-=(const quat<R> &rhs)
+        quat_t &operator-=(const quat_t &rhs)
         {
             x -= rhs.x; y -= rhs.y; z -= rhs.z; w -= rhs.w;
             return *this;
@@ -179,43 +175,38 @@ namespace cql
         //
 
         // Scalar
-        template<typename R>
-        enable_if_t<!is_quat<R>::value, quat<bigger_t<value_t, R>>>
-        operator*(const R &rhs) const
+        quat_t operator*(const value_t &rhs) const
         {
-            return {x*rhs, y*rhs, z*rhs, w*rhs};
+            return {x * rhs, y * rhs, z * rhs, w * rhs};
         }
-        template<typename R>
-        enable_if_t<!is_quat<R>::value, type_t&>
-        operator*=(const R &rhs)
+
+        quat_t &operator*=(const value_t &rhs)
         {
             x *= rhs; y *= rhs; z *= rhs; w *= rhs;
             return *this;
         }
-        template<typename L> friend
-        enable_if_t<!(is_quat<L>::value || has_rhs_mult<L, type_t>::value), quat<bigger_t<L, value_t>>>
-        operator*(L lhs, const type_t &rhs)
+
+        friend quat_t operator*(const value_t &lhs, const quat_t &rhs)
         {
-            return {lhs*rhs.x, lhs*rhs.y, lhs*rhs.z, lhs*rhs.w};
+            return {lhs * rhs.x, lhs * rhs.y, lhs * rhs.z, lhs * rhs.w};
         }
+
         // Quaternion
-        template<typename R>
-        quat<bigger_t<value_t, R>> operator*(const quat<R> &rhs) const
+        quat_t operator*(const quat_t &rhs) const
         {
-            using _val_t = bigger_t<value_t, R>;
-            const _val_t &_w = (w * rhs.w) - (x * rhs.x) - (y * rhs.y) - (z * rhs.z);
-            const _val_t &_x = (w * rhs.x) + (x * rhs.w) + (y * rhs.z) - (z * rhs.y);
-            const _val_t &_y = (w * rhs.y) - (x * rhs.z) + (y * rhs.w) + (z * rhs.x);
-            const _val_t &_z = (w * rhs.z) + (x * rhs.y) - (y * rhs.x) + (z * rhs.w);
+            const value_t _w = (w * rhs.w) - (x * rhs.x) - (y * rhs.y) - (z * rhs.z);
+            const value_t _x = (w * rhs.x) + (x * rhs.w) + (y * rhs.z) - (z * rhs.y);
+            const value_t _y = (w * rhs.y) - (x * rhs.z) + (y * rhs.w) + (z * rhs.x);
+            const value_t _z = (w * rhs.z) + (x * rhs.y) - (y * rhs.x) + (z * rhs.w);
             return {_x, _y, _z, _w};
         }
-        template<typename R>
-        type_t& operator*=(const quat<R> &rhs)
+
+        quat_t &operator*=(const quat_t &rhs)
         {
-            const value_t &_w = (w * rhs.w) - (x * rhs.x) - (y * rhs.y) - (z * rhs.z);
-            const value_t &_x = (w * rhs.x) + (x * rhs.w) + (y * rhs.z) - (z * rhs.y);
-            const value_t &_y = (w * rhs.y) - (x * rhs.z) + (y * rhs.w) + (z * rhs.x);
-            const value_t &_z = (w * rhs.z) + (x * rhs.y) - (y * rhs.x) + (z * rhs.w);
+            const value_t _w = (w * rhs.w) - (x * rhs.x) - (y * rhs.y) - (z * rhs.z);
+            const value_t _x = (w * rhs.x) + (x * rhs.w) + (y * rhs.z) - (z * rhs.y);
+            const value_t _y = (w * rhs.y) - (x * rhs.z) + (y * rhs.w) + (z * rhs.x);
+            const value_t _z = (w * rhs.z) + (x * rhs.y) - (y * rhs.x) + (z * rhs.w);
             x = _x; y = _y; z = _z; w = _w;
             return *this;
         }
@@ -225,27 +216,24 @@ namespace cql
         //
 
         // Scalar
-        template<typename R>
-        enable_if_t<!is_quat<R>::value, quat<bigger_t<value_t, R>>>
-        operator/(const R &rhs) const
+        quat_t operator/(const value_t &rhs) const
         {
-            return {x/rhs, y/rhs, z/rhs, w/rhs};
+            return {x / rhs, y / rhs, z / rhs, w / rhs};
         }
-        template<typename R>
-        enable_if_t<!is_quat<R>::value, type_t&>
-        operator/=(const R &rhs)
+
+        quat_t &operator/=(const value_t &rhs)
         {
             x /= rhs; y /= rhs; z /= rhs; w /= rhs;
             return *this;
         }
+
         // Quaternion
-        template<typename R>
-        quat<bigger_t<value_t, R>> operator/(const quat<R> &rhs) const
+        quat_t operator/(const quat_t &rhs) const
         {
             return *this * *rhs;
         }
-        template<typename R>
-        type_t& operator/=(const quat<R> &rhs)
+
+        quat_t &operator/=(const quat_t &rhs)
         {
             return *this * *!rhs;
         }
@@ -254,94 +242,140 @@ namespace cql
         // Equality operators
         //
 
-        template<typename R>
-        bool operator==(const quat<R> &rhs) const
+        bool operator==(const quat_t &rhs) const
         {
             return x == rhs.x && y == rhs.y && z == rhs.z && w == rhs.w;
         }
         template<typename R>
-        bool operator!=(const quat<R> &rhs) const
+        bool operator!=(const quat_t &rhs) const
         {
             return x != rhs.x && y != rhs.y && z != rhs.z && w != rhs.w;
+        }
+
+        //
+        // Cast operators
+        //
+
+        template<typename TO>
+        explicit operator quat<TO>() const
+        {
+            return quat<TO>(*this);
         }
 
         //
         // GLM Functions
         //
 
-        #ifndef CQL_NO_GLM
+        #ifdef CQL_HAS_GLM_HEADERS
         CQL_GLM_TEMPLATE
-        quat(const CQL_VEC4 &vec) : x(vec.x), y(vec.y), z(vec.z), w(vec.w) {}
+        explicit quat(const CQL_VEC4 &vec)
+        : x(vec.x), y(vec.y), z(vec.z), w(vec.w)
+        {}
+
         CQL_GLM_TEMPLATE
-        operator CQL_VEC4() const { return {x, y, z, w}; }
+        explicit operator CQL_VEC4() const { return {x, y, z, w}; }
+
         CQL_GLM_TEMPLATE
-        operator CQL_VEC3() const { return {x, y, z}; }
+        explicit operator CQL_VEC3() const { return {x, y, z}; }
+
         CQL_GLM_TEMPLATE
         CQL_VEC4 toEulerVector() const
         {
-            const value_t &htheta = atan2(sqrt((x*x)+(y*y)+(z*z)),w);
-            const value_t &denom = sin(htheta);
-            CQL_VEC4 rtn = {0, 0, 0, value_t(2) * htheta};
+            const value_t htheta = std::atan2(std::sqrt((x * x) + (y * y) + (z * z)),w);
+            const value_t denom = std::sin(htheta);
+            CQL_VEC4 result = {0, 0, 0, value_t(2) * htheta};
             if (denom != value_t(0))
             {
-                rtn.x = x / denom;
-                rtn.y = y / denom;
-                rtn.z = z / denom;
+                result.x = x / denom;
+                result.y = y / denom;
+                result.z = z / denom;
             }
-            return rtn;
+            return result;
         }
+
         CQL_GLM_TEMPLATE
-        type_t& fromEulerVector(const CQL_VEC4 &vec)
+        static quat_t FromEulerVector(const CQL_VEC4 &vec)
         {
-            const value_t &w2 = vec.w / value_t(2);
-            const value_t &sw2 = sin(w2);
-            x = vec.x * sw2;
-            y = vec.y * sw2;
-            z = vec.z * sw2;
-            w = cos(w2);
-            return *this;
+            quat_t result;
+            const value_t w2 = vec.w / value_t(2);
+            const value_t sw2 = std::sin(w2);
+            result.x = vec.x * sw2;
+            result.y = vec.y * sw2;
+            result.z = vec.z * sw2;
+            result.w = std::cos(w2);
+            return result;
         }
+
         CQL_GLM_TEMPLATE
         CQL_VEC3 toEulerAngles() const
         {
-            const GLMT &sy = GLMT(2) * ((w * y) - (z * x));
+            const GLMT sy = GLMT(2) * ((w * y) - (z * x));
             return {
-                atan2(
+                std::atan2(
                     GLMT(2) * ((w * x) + (y * z)),
                     GLMT(1) - (GLMT(2) * ((x * x) + (y * y)))
                 ),
-                fabs(sy) >= GLMT(1)
-                    ? copysign(glm::pi<GLMT>() / GLMT(2), sy)
-                    : asin(sy),
-                atan2(
+                std::fabs(sy) >= GLMT(1)
+                    ? std::copysign(glm::pi<GLMT>() / GLMT(2), sy)
+                    : std::asin(sy),
+                std::atan2(
                     GLMT(2) * ((w * z ) + (x * y)),
                     GLMT(1) - (GLMT(2) * ((y * y) + (z * z)))
                 )
             };
         }
+
         CQL_GLM_TEMPLATE
-        type_t& fromEulerAngles(const CQL_VEC3 &vec)
+        static quat_t FromEulerAngles(const CQL_VEC3 &vec)
         {
+            quat_t result;
             const value_t
-                &cx = cos(vec.x * value_t(0.5)),
-                &sx = sin(vec.x * value_t(0.5)),
-                &cy = cos(vec.y * value_t(0.5)),
-                &sy = sin(vec.y * value_t(0.5)),
-                &cz = cos(vec.z * value_t(0.5)),
-                &sz = sin(vec.z * value_t(0.5));
-            x = (cx * sy * cz) - (sx * cy * sz);
-            y = (cx * cy * sz) + (sx * sy * cz);
-            z = (sx * cy * cz) - (cx * sy * sz);
-            w = (cx * cy * cz) + (sx * sy * sz);
-            return *this;
+                cx = std::cos(vec.x * value_t(0.5)),
+                sx = std::sin(vec.x * value_t(0.5)),
+                cy = std::cos(vec.y * value_t(0.5)),
+                sy = std::sin(vec.y * value_t(0.5)),
+                cz = std::cos(vec.z * value_t(0.5)),
+                sz = std::sin(vec.z * value_t(0.5));
+            result.x = (cx * sy * cz) - (sx * cy * sz);
+            result.y = (cx * cy * sz) + (sx * sy * cz);
+            result.z = (sx * cy * cz) - (cx * sy * sz);
+            result.w = (cx * cy * cz) + (sx * sy * sz);
+            return result;
         }
+
         CQL_GLM_TEMPLATE
-        type_t& rotate(const CQL_VEC4 &vec)
+        quat_t &rotate(const CQL_VEC4 &vec)
         {
-            return *this * type_t().fromEulerVector(vec);
+            return *this *= FromEulerVector(vec);
         }
-        #endif // CQL_NO_GLM
+
+        CQL_GLM_TEMPLATE
+        quat_t rotated(const CQL_VEC4 &vec) const
+        {
+            return *this * FromEulerVector(vec);
+        }
+        #endif // CQL_HAS_GLM_HEADERS
     };
+
+    #ifdef CQL_HAS_GLM_HEADERS
+    CQL_GLM_TEMPLATE
+    quat<GLMT> FromVector(const CQL_VEC4 &vec)
+    {
+        return quat<GLMT>(vec);
+    }
+
+    CQL_GLM_TEMPLATE
+    quat<GLMT> FromEulerVector(const CQL_VEC4 &vec)
+    {
+        return quat<GLMT>::FromEulerVector(vec);
+    }
+
+    CQL_GLM_TEMPLATE
+    quat<GLMT> FromEulerAngles(const CQL_VEC3 &vec)
+    {
+        return quat<GLMT>::FromEulerAngles(vec);
+    }
+    #endif
 
     using quatf_t = quat<float>;
     using quatd_t = quat<double>;
@@ -351,20 +385,51 @@ namespace cql
     {
         using value_t = T;
         using quat_t = quat<value_t>;
-        using type_t = dquat<value_t>;
+        using dquat_t = dquat<value_t>;
         quat_t real; // rotation
         quat_t dual; // translation
 
-        dquat() : real(0.0f, 0.0f, 0.0f, 1.0f), dual(0.0f, 0.0f, 0.0f, 0.0f) {}
+        dquat()
+        : real(0, 0, 0, 1), dual(0, 0, 0, 0)
+        {}
+
+        dquat(const dquat_t &other)
+        : real(other.real), dual(other.dual)
+        {}
+
         template<typename R>
-        dquat(const dquat<R> &other) : real(other.real), dual(other.dual) {}
+        explicit dquat(const dquat<R> &other)
+        : real(other.real), dual(other.dual)
+        {}
+
+        dquat(const quat_t (&val)[2])
+        : real(val[0]), dual(val[1])
+        {}
+
         template<typename R>
-        dquat(const quat<R> (&val)[2]) : real(val[0]), dual(val[1]) {}
+        explicit dquat(const quat<R> (&val)[2])
+        : real(val[0]), dual(val[1])
+        {}
+
+        dquat(const quat_t &r, const quat_t &d)
+        : real(r), dual(d)
+        {}
+
         template<typename R1, typename R2>
-        dquat(const quat<R1> &r, const quat<R2> &d) : real(r), dual(d) {}
-        dquat(const value_t (&val)[8]) : real(val[0], val[1], val[2], val[3]), dual(val[4], val[5], val[6], val[7]) {}
-        dquat(const value_t &rx, const value_t &ry, const value_t &rz, const value_t &rw,
-              const value_t &dx, const value_t &dy, const value_t &dz, const value_t &dw) : real(rx, ry, rz, rw), dual(dx, dy, dz, dw) {}
+        explicit dquat(const quat<R1> &r, const quat<R2> &d)
+        : real(r), dual(d)
+        {}
+
+        dquat(const value_t (&val)[8])
+        : real(val[0], val[1], val[2], val[3]), dual(val[4], val[5], val[6], val[7])
+        {}
+
+        dquat(const value_t &rx, const value_t &ry,
+              const value_t &rz, const value_t &rw,
+              const value_t &dx, const value_t &dy,
+              const value_t &dz, const value_t &dw)
+        : real(rx, ry, rz, rw), dual(dx, dy, dz, dw)
+        {}
 
         //
         // Dual quaternion operators
@@ -376,54 +441,66 @@ namespace cql
             rtn.w = value_t(0);
             return rtn;
         }
-        template<typename R>
-        type_t fromTranslation(const quat<R> &trans)
+
+        static dquat_t FromTranslation(const quat_t &trans)
         {
-            const quat_t &tra = {trans.x, trans.y, trans.z, value_t(0)};
-            dual = value_t(0.5) * (tra * real);
-            return *this;
+            const quat_t tra(trans.x, trans.y, trans.z, value_t(0));
+            const quat_t rea(0, 0, 0, 1);
+            return {rea, value_t(0.5) * (tra * rea)};
         }
-        template<typename R>
-        quat<R> transform(const quat<R> &q) const
+
+        quat_t transform(const quat_t &q) const
         {
             return (real * q * *real) + toTranslationQuat();
         }
 
-        // conjugate operator
-        type_t operator*() const
+        //
+        // Conjugate operator
+        //
+
+        dquat_t operator*() const
         {
             return {*real, *dual};
         }
-        // magnitude operator
-        value_t operator~() const
-        {
-            return ~real;
-        }
+
+        //
+        // Magnitude operator
+        //
+
         value_t magnitude() const
         {
             return real.magnitude();
         }
-        // norm operator
-        type_t operator!() const
+
+        inline value_t operator~() const
         {
-            return *this * (value_t(1) / real.magnitude());
+            return magnitude();
         }
-        type_t norm() const
+
+        //
+        // Normalise operator
+        //
+
+        dquat_t &normalise()
         {
-            return *this * (value_t(1) / real.magnitude());
+            return *this *= (value_t(1) / magnitude());
         }
-        type_t& normalize()
+
+        dquat_t normalised() const
         {
-            *this *= (value_t(1) / real.magnitude());
-            return *this;
+            return *this * (value_t(1) / magnitude());
+        }
+
+        dquat_t operator!() const
+        {
+            return normalised();
         }
 
         //
         // Assignment operator
         //
 
-        template<typename R>
-        type_t& operator=(const dquat<R> &rhs)
+        dquat_t &operator=(const dquat_t &rhs)
         {
             real = rhs.real; dual = rhs.dual;
             return *this;
@@ -433,13 +510,12 @@ namespace cql
         // Addition operators
         //
 
-        template<typename R>
-        dquat<bigger_t<value_t, R>> operator+(const dquat<R> &rhs) const
+        dquat_t operator+(const dquat_t &rhs) const
         {
             return {real + rhs.real, dual + rhs.dual};
         }
-        template<typename R>
-        type_t& operator+=(const dquat<R> &rhs)
+
+        dquat_t &operator+=(const dquat_t &rhs)
         {
             real += rhs.real; dual += rhs.dual;
             return *this;
@@ -449,13 +525,12 @@ namespace cql
         // Subtraction operators
         //
 
-        template<typename R>
-        dquat<bigger_t<value_t, R>> operator-(const dquat<R> &rhs) const
+        dquat_t operator-(const dquat_t &rhs) const
         {
             return {real - rhs.real, dual - rhs.dual};
         }
-        template<typename R>
-        type_t& operator-=(const dquat<R> &rhs)
+
+        dquat_t &operator-=(const dquat_t &rhs)
         {
             real -= rhs.real; dual -= rhs.dual;
             return *this;
@@ -466,39 +541,33 @@ namespace cql
         //
 
         // Scalar
-        template<typename R>
-        enable_if_t<!is_quat<R>::value, dquat<bigger_t<value_t, R>>>
-        operator*(const R &rhs) const
+        dquat_t operator*(const value_t &rhs) const
         {
-            return {real*rhs, dual*rhs};
+            return {real * rhs, dual * rhs};
         }
-        template<typename R>
-        enable_if_t<!is_quat<R>::value, type_t&>
-        operator*=(const R &rhs)
+
+        dquat_t &operator*=(const value_t &rhs)
         {
             real *= rhs; dual *= rhs;
             return *this;
         }
-        template<typename L> friend
-        enable_if_t<!(is_quat<L>::value || has_rhs_mult<L, type_t>::value), dquat<bigger_t<L, value_t>>>
-        operator*(L lhs, const type_t &rhs)
+
+        friend dquat_t operator*(const value_t &lhs, const dquat_t &rhs)
         {
-            return {lhs*rhs.real, lhs*rhs.dual};
+            return {lhs * rhs.real, lhs * rhs.dual};
         }
+
         // Quaternion
-        template<typename R>
-        dquat<bigger_t<value_t, R>> operator*(const dquat<R> &rhs) const
+        dquat_t operator*(const dquat_t &rhs) const
         {
-            using _val_t = bigger_t<value_t, R>;
-            using _rtn_t = quat<_val_t>;
-            const _rtn_t &d = _val_t(0.5) * rhs.transform(toTranslationQuat());
-            const _rtn_t &r = real * rhs.real;
+            const quat_t d = value_t(0.5) * rhs.transform(toTranslationQuat());
+            const quat_t r = real * rhs.real;
             return {r, d * r};
         }
-        template<typename R>
-        type_t& operator*=(const dquat<R> &rhs)
+
+        dquat_t &operator*=(const dquat_t &rhs)
         {
-            const quat_t &d = rhs.transform(toTranslationQuat()) * value_t(0.5);
+            const quat_t d = value_t(0.5) * rhs.transform(toTranslationQuat());
             real *= rhs.real;
             dual  = d * real;
             return *this;
@@ -509,27 +578,24 @@ namespace cql
         //
 
         // Scalar
-        template<typename R>
-        enable_if_t<!is_quat<R>::value, dquat<bigger_t<value_t, R>>>
-        operator/(const R &rhs) const
+        dquat_t operator/(const value_t &rhs) const
         {
-            return {real/rhs, dual/rhs};
+            return {real / rhs, dual / rhs};
         }
-        template<typename R>
-        enable_if_t<!is_quat<R>::value, type_t&>
-        operator/=(const R &rhs)
+
+        dquat_t operator/=(const value_t &rhs)
         {
             real /= rhs; dual /= rhs;
             return *this;
         }
+
         // Quaternion
-        template<typename R>
-        dquat<bigger_t<value_t, R>> operator/(const dquat<R> &rhs) const
+        dquat_t operator/(const dquat_t &rhs) const
         {
             return *this * *!rhs;
         }
-        template<typename R>
-        type_t& operator/=(const dquat<R> &rhs)
+
+        dquat_t &operator/=(const dquat_t &rhs)
         {
             return *this *= *!rhs;
         }
@@ -538,90 +604,108 @@ namespace cql
         // Equality operators
         //
 
-        template<typename R>
-        bool operator==(const dquat<R> &rhs) const
+        bool operator==(const dquat_t &rhs) const
         {
             return real == rhs.real && dual == rhs.dual;
         }
-        template<typename R>
-        bool operator!=(const dquat<R> &rhs) const
+
+        bool operator!=(const dquat_t &rhs) const
         {
             return real != rhs.real && dual != rhs.dual;
+        }
+
+        //
+        // Cast operators
+        //
+
+        template<typename TO>
+        explicit operator dquat<TO>() const
+        {
+            return dquat<TO>(*this);
         }
 
         //
         // GLM operators
         //
 
-        #ifndef CQL_NO_GLM
+        #ifdef CQL_HAS_GLM_HEADERS
         CQL_GLM_TEMPLATE
         CQL_VEC4 toEulerVector() const
         {
             return real.toEulerVector();
         }
+
         CQL_GLM_TEMPLATE
-        type_t& fromEulerVector(const CQL_VEC4 &vec)
+        static dquat_t FromEulerVector(const CQL_VEC4 &vec)
         {
-            real.fromEulerVector(vec);
-            return *this;
+            return dquat{quat_t::FromEulerVector(vec), quat_t{0, 0, 0, 0}};
         }
+
         CQL_GLM_TEMPLATE
         CQL_VEC3 toEulerAngles() const
         {
             return real.toEulerAngles();
         }
+
         CQL_GLM_TEMPLATE
-        type_t& fromEulerAngles(const CQL_VEC3 &vec)
+        static dquat_t FromEulerAngles(const CQL_VEC3 &vec)
         {
-            real.fromEulerAngles(vec);
-            return *this;
+            return {quat_t::FromEulerAngles(vec), quat_t{0, 0, 0, 0}};
         }
+
         CQL_GLM_TEMPLATE
-        type_t& fromTranslation(const CQL_VEC3 &vec)
+        static dquat_t FromTranslation(const CQL_VEC3 &vec)
         {
-            const quat_t &trans = {vec.x, vec.y, vec.z, value_t(0)};
-            dual = value_t(0.5) * (trans * real);
-            return *this;
+            const quat_t tra = {vec.x, vec.y, vec.z, value_t(0)};
+            const quat_t rea(0, 0, 0, 1);
+            return {rea, value_t(0.5) * (tra * rea)};
         }
+
         CQL_GLM_TEMPLATE
         CQL_VEC3 toTranslationVec() const
         {
             return GLMT(2) * (dual * (*real));
         }
+
         CQL_GLM_TEMPLATE
         CQL_VEC4 transform(const CQL_VEC4 &vec) const
         {
-            return (real * ((quat_t)vec) * *real) + toTranslationQuat();
+            return (real * quat_t(vec) * *real) + toTranslationQuat();
         }
+
         CQL_GLM_TEMPLATE
         CQL_MAT4 toTransform() const
         {
-            const CQL_VEC3 &trans = toTranslationVec<GLMT,GLMP>();
+            const CQL_VEC3 trans = toTranslationVec<GLMT,GLMP>();
             const GLMT
-                &x = real.x,
-                &y = real.y,
-                &z = real.z,
-                &w = real.w,
-                &x2 = x*x,
-                &y2 = y*y,
-                &z2 = z*z,
-                &w2 = w*w,
-                &tx = 2*x,
-                &ty = 2*y,
-                &tz = 2*z;
+                x = real.x,
+                y = real.y,
+                z = real.z,
+                w = real.w,
+                x2 = x * x,
+                y2 = y * y,
+                z2 = z * z,
+                w2 = w * w,
+                tx = 2 * x,
+                ty = 2 * y,
+                tz = 2 * z;
+
             return {
                 (x2 + w2) - (y2 + z2),
-                (tx*y) + (tz*w),
-                (tx*z) - (ty*w),
+                (tx * y)  + (tz * w),
+                (tx * z)  - (ty * w),
                 GLMT(0),
-                (tx*y) - (tz*w),
+
+                (tx * y)  - (tz * w),
                 (y2 + w2) - (x2 + z2),
-                (ty*z) + (tx*w),
+                (ty * z)  + (tx * w),
                 GLMT(0),
-                (tx*z) + (ty*w),
-                (ty*z) - (tx*w),
+
+                (tx * z)  + (ty * w),
+                (ty * z)  - (tx * w),
                 (z2 + w2) - (x2 + y2),
                 GLMT(0),
+
                 trans.x,
                 trans.y,
                 trans.z,
@@ -630,8 +714,22 @@ namespace cql
             // This is a Euler-Rodrigues transform
             // https://en.wikipedia.org/wiki/Euler-Rodrigues_formula
         }
-        #endif // CQL_NO_GLM
+        #endif // CQL_HAS_GLM_HEADERS
     };
+
+    #ifdef CQL_HAS_GLM_HEADERS
+    CQL_GLM_TEMPLATE
+    dquat<GLMT> FromVectors(const CQL_VEC4 &real, const CQL_VEC4 &dual)
+    {
+        return dquat<GLMT>(real, dual);
+    }
+
+    CQL_GLM_TEMPLATE
+    dquat<GLMT> FromTransaction(const CQL_VEC3 &vec)
+    {
+        return dquat<GLMT>::FromTranslation(vec);
+    }
+    #endif
 
     using dquatf_t = dquat<float>;
     using dquatd_t = dquat<double>;
